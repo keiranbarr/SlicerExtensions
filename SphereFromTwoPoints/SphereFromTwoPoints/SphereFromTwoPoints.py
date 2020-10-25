@@ -5,6 +5,8 @@ import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
 from slicer.util import VTKObservationMixin
 
+import numpy as np
+
 #
 # SphereFromTwoPoints
 #
@@ -284,24 +286,38 @@ class SphereFromTwoPointsLogic(ScriptedLoadableModuleLogic):
 
   def getCenterOfMass(self, markupsNode):
     centerOfMass = [0,0,0]
-
-    import numpy as np
     sumPos = np.zeros(3)
-    for i in range(markupsNode.GetNumberOfMarkups()):
+    for i in range(markupsNode.GetNumberOfControlPoints()):
       pos = np.zeros(3)
       markupsNode.GetNthFiducialPosition(i,pos)
       sumPos += pos
 
-    centerOfMass = sumPos / markupsNode.GetNumberOfMarkups()
+    if markupsNode.GetNumberOfControlPoints() < 1:
+      logging.error("Cannot compute center if no points are given")
+      return
+
+    centerOfMass = sumPos / markupsNode.GetNumberOfControlPoints()
 
     logging.info('Center of mass for \'' + markupsNode.GetName() + '\': ' + repr(centerOfMass))
 
     return centerOfMass
 
   def createSphere(self, markupsNode):
+    if markupsNode.GetNumberOfControlPoints() < 2:
+      logging.error("Cannot fit a sphere to less than 2 points")
+      return
+
+    point0 = np.zeros(3)
+    point1 = np.zeros(3)
+    markupsNode.GetNthFiducialPosition(0, point0)
+    markupsNode.GetNthFiducialPosition(1, point1)
+
+    radius = np.linalg.norm(point1 - point0) / 2.0
+    center = (point0 + point1) / 2.0
+
     sphere = vtk.vtkSphereSource()
-    sphere.SetRadius()
-    sphere.SetCenter(markupsNode[0],markupsNode[1],markupsNode[2])
+    sphere.SetRadius(radius)
+    sphere.SetCenter(center)
     sphere.SetThetaResolution(32)
     sphere.SetPhiResolution(32)
     sphere.Update()
@@ -310,23 +326,6 @@ class SphereFromTwoPointsLogic(ScriptedLoadableModuleLogic):
     modelNode.SetAndObservePolyData(sphere.GetOutput())
     modelNode.CreateDefaultDisplayNodes()
     modelNode.GetDisplayNode().SetSliceIntersectionVisibility(True)
-
-    '''
-    sphere = vtk.vtkSphereSource()
-    sphere.SetRadius(30.0)
-    sphere.SetCenter(markupsNode[0],markupsNode[1],markupsNode[2])
-    sphere.Update()
-    modelNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLModelNode')
-    modelNode.CreateDefaultDisplayNodes()
-    modelNode.GetDisplayNode().SetSliceIntersectionVisibility(True)
-    '''
-
-    '''
-    markupsToModel = slicer.mrmlScene.AddNode(slicer.vtkMRMLMarkupsToModelNode())
-    markupsToModel.SetAutoUpdateOutput(True)
-    markupsToModel.SetAndObserveModelNodeID(outputModel.GetID())
-    markupsToModel.SetAndObserveMarkupsNodeID(inputMarkups.GetID())
-    '''
 
   def __init__(self):
     """
@@ -339,11 +338,11 @@ class SphereFromTwoPointsLogic(ScriptedLoadableModuleLogic):
     Initialize parameter node with default settings.
     """
 
-  def run(self, inputVolume):
+  def run(self, inputFiducials):
     """
     Run the processing algorithm.
     Can be used without GUI widget.
-    :param inputVolume: volume to be thresholded
+    :param inputFiducials: fiducials
     :param outputVolume: thresholding result
     :param imageThreshold: values above/below this threshold will be set to 0
     :param invert: if True then values above the threshold will be set to 0, otherwise values below are set to 0
@@ -353,12 +352,9 @@ class SphereFromTwoPointsLogic(ScriptedLoadableModuleLogic):
     """
     Run the actual algorithm
     """
-    self.centerOfMass = self.getCenterOfMass(inputVolume)
-    self.createSphere(self.centerOfMass)
+    self.createSphere(inputFiducials)
 
     return True
-
-
 
 #
 # SphereFromTwoPointsTest
