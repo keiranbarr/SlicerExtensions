@@ -284,29 +284,7 @@ class SphereFromTwoPointsLogic(ScriptedLoadableModuleLogic):
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
 
-  def getCenterOfMass(self, markupsNode):
-    centerOfMass = [0,0,0]
-    sumPos = np.zeros(3)
-    for i in range(markupsNode.GetNumberOfControlPoints()):
-      pos = np.zeros(3)
-      markupsNode.GetNthFiducialPosition(i,pos)
-      sumPos += pos
-
-    if markupsNode.GetNumberOfControlPoints() < 1:
-      logging.error("Cannot compute center if no points are given")
-      return
-
-    centerOfMass = sumPos / markupsNode.GetNumberOfControlPoints()
-
-    logging.info('Center of mass for \'' + markupsNode.GetName() + '\': ' + repr(centerOfMass))
-
-    return centerOfMass
-
-  def createSphere(self, markupsNode):
-    if markupsNode.GetNumberOfControlPoints() < 2:
-      logging.error("Cannot fit a sphere to less than 2 points")
-      return
-
+  def createSphere(self,markupsNode,modelNode):
     point0 = np.zeros(3)
     point1 = np.zeros(3)
     markupsNode.GetNthFiducialPosition(0, point0)
@@ -322,10 +300,26 @@ class SphereFromTwoPointsLogic(ScriptedLoadableModuleLogic):
     sphere.SetPhiResolution(32)
     sphere.Update()
 
-    modelNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLModelNode')
     modelNode.SetAndObservePolyData(sphere.GetOutput())
     modelNode.CreateDefaultDisplayNodes()
     modelNode.GetDisplayNode().SetSliceIntersectionVisibility(True)
+
+  def updateSphere(self, markupsNode):
+    if markupsNode.GetNumberOfControlPoints() < 2:
+      logging.error("Cannot fit a sphere to less than 2 points")
+      return
+
+    # if there is an existing model node, modify it instead of creating a new one
+    if slicer.mrmlScene.GetNodeByID('vtkMRMLModelNode4') != None:
+      logging.info("Detected an existing model node, updating it")
+      modelNode = slicer.mrmlScene.GetNodeByID('vtkMRMLModelNode4')
+      self.createSphere(markupsNode,modelNode)
+
+      return
+
+    logging.info("No model node detected")
+    modelNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLModelNode')
+    self.createSphere(markupsNode,modelNode)
 
   def __init__(self):
     """
@@ -352,7 +346,7 @@ class SphereFromTwoPointsLogic(ScriptedLoadableModuleLogic):
     """
     Run the actual algorithm
     """
-    self.createSphere(inputFiducials)
+    self.updateSphere(inputFiducials)
 
     return True
 
