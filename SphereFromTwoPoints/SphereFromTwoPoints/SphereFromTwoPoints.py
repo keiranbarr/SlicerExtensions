@@ -284,43 +284,6 @@ class SphereFromTwoPointsLogic(ScriptedLoadableModuleLogic):
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
 
-  def createSphere(self,markupsNode,modelNode):
-    point0 = np.zeros(3)
-    point1 = np.zeros(3)
-    markupsNode.GetNthFiducialPosition(0, point0)
-    markupsNode.GetNthFiducialPosition(1, point1)
-
-    radius = np.linalg.norm(point1 - point0) / 2.0
-    center = (point0 + point1) / 2.0
-
-    sphere = vtk.vtkSphereSource()
-    sphere.SetRadius(radius)
-    sphere.SetCenter(center)
-    sphere.SetThetaResolution(32)
-    sphere.SetPhiResolution(32)
-    sphere.Update()
-
-    modelNode.SetAndObservePolyData(sphere.GetOutput())
-    modelNode.CreateDefaultDisplayNodes()
-    modelNode.GetDisplayNode().SetSliceIntersectionVisibility(True)
-
-  def updateSphere(self, markupsNode):
-    if markupsNode.GetNumberOfControlPoints() < 2:
-      logging.error("Cannot fit a sphere to less than 2 points")
-      return
-
-    # if there is an existing model node, modify it instead of creating a new one
-    if slicer.mrmlScene.GetNodeByID('vtkMRMLModelNode4') != None:
-      logging.info("Detected an existing model node, updating it")
-      modelNode = slicer.mrmlScene.GetNodeByID('vtkMRMLModelNode4')
-      self.createSphere(markupsNode,modelNode)
-
-      return
-
-    logging.info("No model node detected")
-    modelNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLModelNode')
-    self.createSphere(markupsNode,modelNode)
-
   def __init__(self):
     """
     Called when the logic class is instantiated. Can be used for initializing member variables.
@@ -333,20 +296,37 @@ class SphereFromTwoPointsLogic(ScriptedLoadableModuleLogic):
     """
 
   def run(self, inputFiducials):
-    """
-    Run the processing algorithm.
-    Can be used without GUI widget.
-    :param inputFiducials: fiducials
-    :param outputVolume: thresholding result
-    :param imageThreshold: values above/below this threshold will be set to 0
-    :param invert: if True then values above the threshold will be set to 0, otherwise values below are set to 0
-    :param showResult: show output volume in slice viewers
-    """
+    #self.updateSphere(inputFiducials)
 
-    """
-    Run the actual algorithm
-    """
-    self.updateSphere(inputFiducials)
+    #TODO: change params to actual things to be passed in (sphere and fiducials), so I can move it out of this function
+    def UpdateSphere(param1,param2):
+      point0 = np.zeros(3)
+      point1 = np.zeros(3)
+      inputFiducials.GetNthFiducialPosition(0, point0)
+      inputFiducials.GetNthFiducialPosition(1, point1)
+
+      radius = np.linalg.norm(point1 - point0) / 2.0
+      center = (point0 + point1) / 2.0
+
+      sphere.SetRadius(radius)
+      sphere.SetCenter(center)
+      sphere.SetThetaResolution(32)
+      sphere.SetPhiResolution(32)
+      sphere.Update()
+
+    # Get markup node from scene
+    sphere = vtk.vtkSphereSource()
+    UpdateSphere(0,0)
+
+    # Create model node and add to scene
+    modelsLogic = slicer.modules.models.logic()
+    model = modelsLogic.AddModel(sphere.GetOutput())
+    model.GetDisplayNode().SetSliceIntersectionVisibility(True)
+    model.GetDisplayNode().SetSliceIntersectionThickness(3)
+    model.GetDisplayNode().SetColor(1,1,0)
+
+    # Call UpdateSphere whenever the fiducials are changed
+    inputFiducials.AddObserver(slicer.vtkMRMLMarkupsNode.PointModifiedEvent, UpdateSphere, 2)
 
     return True
 
